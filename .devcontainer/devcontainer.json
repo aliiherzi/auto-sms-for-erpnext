@@ -9,7 +9,7 @@
     }
   },
   "postCreateCommand": "npm ci",
-  "postAttachCommand": "node scripts/codespace-setup.mjs && npm run dev",
+  "postAttachCommand": "node scripts/setup-env.mjs && npm run dev",
   "customizations": {
     "codespaces": {
       "openFiles": ["TESTING.md"]

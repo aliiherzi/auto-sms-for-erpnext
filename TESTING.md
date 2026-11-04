@@ -1,25 +1,42 @@
 # Test it yourself before installing
 
-Try the real program in **GitHub Codespaces**, a free temporary computer from GitHub that runs in your browser. It can reach WhatsApp and your ERPNext, so you can link a real number and receive real messages.
+Run the real program on **your own computer** and open it at **http://localhost:3000**. It talks to your real WhatsApp and your real ERPNext, so you see exactly what you'll get on the server.
 
 Your customers are safe while you test: **Test mode** is on, so customer and supplier messages go only to *your* number. The ERPNext user you create only reads.
 
-## 1. Open it
+## 1. Start it on your computer
 
-**[Open in GitHub Codespaces](https://codespaces.new/aliiherzi/auto-sms-for-erpnext?quickstart=1)** → **Create codespace**, then wait 2–3 minutes.
+### Windows
 
-When it's ready, the terminal at the bottom shows:
+1. Install **Node.js** (the **LTS** button) from **https://nodejs.org**: Next → Next → Finish.
+2. Open **https://github.com/aliiherzi/auto-sms-for-erpnext** → green **Code** button → **Download ZIP**. Right-click the ZIP → **Extract All**.
+3. In the extracted folder, double-click **`start-windows.bat`**. If Windows says *"Windows protected your PC"*, click **More info → Run anyway**.
+4. The first time it installs for 2–3 minutes. Then your browser opens **http://localhost:3000**, and the black window shows your **password**.
 
-```
-  Dashboard: https://….app.github.dev
-  Password:  …
-```
+### Mac
 
-The dashboard usually opens in a new tab by itself. If not, open the **Ports** tab, find port **3000** and click the 🌐 globe icon.
+1. Install **Node.js** (the **LTS** button) from **https://nodejs.org**.
+2. Open **https://github.com/aliiherzi/auto-sms-for-erpnext** → green **Code** button → **Download ZIP**, then double-click the ZIP to unzip it.
+3. Open **Terminal**, type `cd ` (with a space after it), drag the unzipped folder into the Terminal window and press **Enter**. Then type:
+
+   ```bash
+   sh start.sh
+   ```
+
+4. Your browser opens **http://localhost:3000**, and Terminal shows your **password**.
+
+**Keep that window open while you test.** Messages are only sent while it runs and the computer is awake. If port 3000 is busy on your computer, it uses 3001 (or the next free port) and opens that instead.
+
+<details>
+<summary>No computer handy? Use GitHub Codespaces instead (runs in the browser)</summary>
+
+**[Open in GitHub Codespaces](https://codespaces.new/aliiherzi/auto-sms-for-erpnext?quickstart=1)** → **Create codespace**, wait 2–3 minutes. The terminal shows the dashboard link and password; the **Ports** tab → port **3000** → 🌐 opens it. It stops by itself after 30 minutes without use.
+
+</details>
 
 ## 2. Log in
 
-Use the password from the terminal. It's also in the `.env` file.
+Use the password from the window. It's also in the `.env` file in the folder.
 
 ## 3. Connect your ERPNext
 
@@ -40,10 +57,9 @@ In the dashboard:
 
 ## 4. Link WhatsApp
 
-On **Overview** you see a QR code.
+On **Overview** you see a QR code. On your phone open **WhatsApp → Settings → Linked devices → Link a device** and scan it.
 
-- **Dashboard on a computer**: on your phone open **WhatsApp → Settings → Linked devices → Link a device** and scan it.
-- **Dashboard on the same phone**: open **"Can't scan? Link with phone number instead"**, enter your number and press **Get pairing code**. Then in WhatsApp go to **Linked devices → Link a device → Link with phone number instead** and type the code.
+If the dashboard is open on the same phone you're linking, use **"Can't scan? Link with phone number instead"** and type the 8-character code in WhatsApp (**Linked devices → Link a device → Link with phone number instead**).
 
 Use a business or test number if you have one.
 
@@ -72,7 +88,6 @@ Only invoices submitted after you connected are sent automatically. To try an ol
 
 ## When you're done
 
-- The test computer **stops by itself** after 30 minutes without use, and nothing is sent while it's stopped. It's for testing only.
-- To remove it: go to **github.com/codespaces** → **⋯** next to it → **Delete**. Then on your phone: **WhatsApp → Linked devices** → remove the device.
-- GitHub gives free Codespaces hours every month; a test like this uses about an hour.
+- Stop it: close the window (or press **Ctrl+C**). To start again later, double-click `start-windows.bat` or run `sh start.sh`. Your settings and WhatsApp link are kept in the `data` folder.
+- To remove everything, delete the folder, then on your phone go to **WhatsApp → Linked devices** and remove the device.
 - For daily use, install it on your server: README → *Install it on your server*. You set it up there again; it takes about 5 minutes.

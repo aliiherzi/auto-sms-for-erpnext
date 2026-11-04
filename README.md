@@ -2,7 +2,7 @@
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/aliiherzi/auto-sms-for-erpnext?quickstart=1)
 
-**Try it first:** open the button above and follow [TESTING.md](TESTING.md) to test the real program with your own WhatsApp and ERPNext, before installing it on your server.
+**Try it first on your own computer** (Windows: double-click `start-windows.bat`, Mac: `sh start.sh`, then open http://localhost:3000), or with the Codespaces button above. [TESTING.md](TESTING.md) walks you through a full test with your own WhatsApp and ERPNext, before you install it on your server.
 
 A small standalone service that connects **ERPNext** to **WhatsApp**. It runs next to ERPNext, not inside it:
 

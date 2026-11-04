@@ -41,7 +41,8 @@ export type Env = z.infer<typeof EnvSchema>;
 export function loadEnv(source: NodeJS.ProcessEnv = process.env, envFile = '.env'): Env {
   if (source === process.env && fs.existsSync(envFile)) {
     for (const [key, value] of Object.entries(parseDotEnv(fs.readFileSync(envFile, 'utf8')))) {
-      if (process.env[key] === undefined) process.env[key] = value;
+      // "KEY=" means "not set"; an empty TZ in particular breaks time zones.
+      if (value !== '' && process.env[key] === undefined) process.env[key] = value;
     }
   }
   const parsed = EnvSchema.safeParse(source);

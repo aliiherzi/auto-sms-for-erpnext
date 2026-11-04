@@ -55,6 +55,22 @@ describe('settings', () => {
   });
 });
 
+describe('time zone fallback', () => {
+  it('never returns an invalid zone, even with an empty TZ variable', async () => {
+    const { ContextResolver } = await import('../../src/erpnext/context.js');
+    const { isValidTimeZone } = await import('../../src/util/time.js');
+    const before = process.env.TZ;
+    process.env.TZ = '';
+    try {
+      const tz = new ContextResolver(() => ({}) as never, () => defaultSettings()).fallbackTimezone();
+      expect(isValidTimeZone(tz)).toBe(true);
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
+  });
+});
+
 describe('env', () => {
   it('parses .env files', () => {
     expect(parseDotEnv('# c\nA=1\nB="two words"\nexport C=3 # note\nD=\n')).toEqual({ A: '1', B: 'two words', C: '3', D: '' });

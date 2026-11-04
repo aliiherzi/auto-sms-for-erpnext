@@ -31,7 +31,9 @@ export class ContextResolver {
     if (this.lastTimezone) return this.lastTimezone;
     const envTz = process.env.TZ;
     if (envTz && isValidTimeZone(envTz)) return envTz;
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    // An empty TZ variable makes Node report "Etc/Unknown", which schedulers reject.
+    const system = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return system && isValidTimeZone(system) ? system : 'UTC';
   }
 
   /**
