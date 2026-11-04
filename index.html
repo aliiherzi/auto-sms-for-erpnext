@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Auto SMS for ERPNext</title>
+    <meta name="description" content="Send your ERPNext invoices and reports to WhatsApp automatically." />
+    <meta name="theme-color" content="#128c6e" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Auto SMS" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- Log in (dashboard served by your own server) -->
+    <div id="login" class="login hidden">
+      <form id="login-form" class="card login-card">
+        <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
+        <p class="muted">Enter the dashboard password (ADMIN_PASSWORD).</p>
+        <label>Password <input id="login-password" type="password" autocomplete="current-password" required /></label>
+        <button type="submit" class="primary">Log in</button>
+        <p id="login-error" class="error-text"></p>
+      </form>
+    </div>
+
+    <!-- Welcome (the app on GitHub Pages): try the demo, or connect to your installed server -->
+    <div id="welcome" class="login hidden">
+      <div class="card login-card welcome-card">
+        <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
+        <p class="muted">Sends your ERPNext invoices and reports to WhatsApp, automatically.</p>
+        <button id="try-demo" class="primary wide">Look around with sample data</button>
+        <p class="hint">Every screen works with example invoices and reports. Nothing is sent.</p>
+        <div class="welcome-or"><span>already installed Auto SMS on your server?</span></div>
+        <form id="connect-form">
+          <label>
+            Your Auto SMS server address
+            <span class="hint">Not an email. It's the web address you get after installing, like https://sms.yourcompany.com</span>
+            <input id="connect-url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://sms.yourcompany.com" required />
+          </label>
+          <label>
+            Dashboard password
+            <span class="hint">The one shown when you installed Auto SMS, not your email password.</span>
+            <input id="connect-password" type="password" autocomplete="off" required />
+          </label>
+          <button type="submit" class="wide">Connect</button>
+          <p id="connect-error" class="error-text"></p>
+        </form>
+        <p class="hint welcome-note">
+          This app is the remote control. Your server sends the messages, even when your phone is off.
+          No server yet? <a href="https://github.com/aliiherzi/auto-sms-for-erpnext#2-install-it-on-your-server" target="_blank" rel="noopener">How to install it</a>
+        </p>
+      </div>
+    </div>
+
+    <div id="shell" class="hidden">
+      <div id="demo-banner" class="demo-banner hidden" role="note">
+        <strong>Demo with sample data.</strong> Nothing here is real and nothing is sent. When Auto SMS is installed on your server:
+        <button id="leave-demo" class="small">Connect your server</button>
+      </div>
+      <header class="topbar">
+        <div class="brand"><span class="logo" aria-hidden="true"></span><span>Auto SMS <span class="muted">for ERPNext</span></span></div>
+        <div class="pills" id="pills"></div>
+        <button id="logout" class="ghost small">Log out</button>
+      </header>
+      <nav class="tabs" id="tabs">
+        <button data-tab="overview" class="active">Overview</button>
+        <button data-tab="settings">Settings</button>
+        <button data-tab="activity">Activity</button>
+        <button data-tab="tools">Tools</button>
+        <button data-tab="logs">Logs</button>
+      </nav>
+      <main>
+        <section id="tab-overview" class="tab"></section>
+        <section id="tab-settings" class="tab hidden"></section>
+        <section id="tab-activity" class="tab hidden"></section>
+        <section id="tab-tools" class="tab hidden"></section>
+        <section id="tab-logs" class="tab hidden"></section>
+      </main>
+    </div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <script src="config.js"></script>
+    <script src="boot.js"></script>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
