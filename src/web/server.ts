@@ -83,11 +83,31 @@ export function createServer(app: App) {
     app.invoices.process(doctype, name, { source: 'webhook' }).catch((error) => log.warn(`Webhook for ${doctype} ${name} failed: ${(error as Error).message}`));
   });
 
+  // The dashboard app published on GitHub Pages (another site) may call this API with a login token.
+  const allowedOrigins = new Set(app.env.ALLOWED_ORIGINS);
+  server.use('/api', (req, res, next) => {
+    const origin = req.get('origin');
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Max-Age', '600');
+      // Chrome asks before a public site talks to this computer (http://localhost while testing).
+      if (req.get('access-control-request-private-network')) res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+
   server.use(express.json({ limit: '1mb' }));
 
   // -- session ---------------------------------------------------------------
   server.get('/api/session', (req, res) => {
-    res.json({ loggedIn: auth.isValid(req) });
+    res.json({ loggedIn: auth.isValid(req), app: 'auto-sms-for-erpnext' });
   });
 
   server.post('/api/login', (req, res) => {
@@ -103,8 +123,8 @@ export function createServer(app: App) {
       return;
     }
     auth.clearFailures(ip);
-    auth.issue(res, req.secure);
-    res.json({ ok: true });
+    const token = auth.issue(res, req.secure);
+    res.json({ ok: true, token });
   });
 
   server.post('/api/logout', (_req, res) => {

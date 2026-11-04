@@ -32,6 +32,11 @@ const EnvSchema = z.object({
   WHATSAPP_DRIVER: z.preprocess(emptyToUndefined, z.enum(['baileys', 'fake']).default('baileys')),
   /** Set when running behind a reverse proxy (nginx, Traefik…) so secure cookies work. */
   TRUST_PROXY: bool(false),
+  /** Sites allowed to use this server's API from the browser (the phone app on GitHub Pages). */
+  ALLOWED_ORIGINS: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() ? v : 'https://aliiherzi.github.io'),
+    z.string().transform((v) => v.split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean)),
+  ),
   SESSION_SECRET: optionalString,
 });
 

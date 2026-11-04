@@ -25,13 +25,51 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+// ---------------------------------------------------------------------------
+// where the server is
+// ---------------------------------------------------------------------------
+// Served by your server, the dashboard talks to the address it came from. As the app on
+// GitHub Pages (AUTO_SMS_STATIC), it talks to the server you connect to, or runs the demo.
+const STATIC = window.AUTO_SMS_STATIC === true;
+const saved = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      // private browsing: the app still works, it just won't remember the server
+    }
+  },
+};
+const DEMO = STATIC && saved.get('asms.mode') === 'demo';
+let apiBase = STATIC && !DEMO ? saved.get('asms.server') || '' : '';
+let token = STATIC && !DEMO ? saved.get('asms.token') : null;
+
 async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
-  });
+  if (STATIC && !DEMO && !apiBase) {
+    showLogin();
+    throw new Error('Please log in');
+  }
+  const headers = body !== undefined ? { 'Content-Type': 'application/json' } : {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let res;
+  try {
+    res = await fetch(`${apiBase}/api${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: apiBase ? 'omit' : 'same-origin',
+    });
+  } catch {
+    throw new Error(apiBase ? `Can't reach your server at ${apiBase}. Check the address and that the server is running.` : "Can't reach the server.");
+  }
   if (res.status === 401 && path !== '/login') {
     showLogin();
     throw new Error('Please log in');
@@ -216,13 +254,21 @@ function profileFor(profiles, company) {
 // ---------------------------------------------------------------------------
 function showLogin() {
   $('#shell').classList.add('hidden');
-  $('#login').classList.remove('hidden');
   clearTimeout(statusTimer);
+  if (STATIC) {
+    $('#welcome').classList.remove('hidden');
+    const url = $('#connect-url');
+    if (!url.value) url.value = saved.get('asms.server') || '';
+    setTimeout(() => (url.value ? $('#connect-password') : url).focus(), 50);
+    return;
+  }
+  $('#login').classList.remove('hidden');
   setTimeout(() => $('#login-password').focus(), 50);
 }
 
 async function showShell() {
   $('#login').classList.add('hidden');
+  $('#welcome').classList.add('hidden');
   $('#shell').classList.remove('hidden');
   await refreshStatus();
   await loadGroups();
@@ -249,8 +295,60 @@ $('#login-form').addEventListener('submit', async (event) => {
 });
 
 $('#logout').addEventListener('click', async () => {
+  if (DEMO) {
+    saved.set('asms.mode', null);
+    location.reload();
+    return;
+  }
   await api('/logout', { method: 'POST' }).catch(() => undefined);
+  if (STATIC) {
+    token = null;
+    saved.set('asms.token', null);
+  }
   showLogin();
+});
+
+// The app on GitHub Pages: connect to your own server…
+$('#connect-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const error = $('#connect-error');
+  error.textContent = '';
+  let url = $('#connect-url').value.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
+  if (location.protocol === 'https:' && url.startsWith('http://') && !local) {
+    error.textContent = 'Use the https:// address of your server: phones and browsers block plain http:// from this app. (README → "Your own web address")';
+    return;
+  }
+  const button = event.submitter;
+  if (button) button.disabled = true;
+  apiBase = url;
+  token = null;
+  try {
+    const session = await api('/session');
+    if (session.app !== 'auto-sms-for-erpnext') throw new Error('That address is not an Auto SMS server.');
+    const result = await api('/login', { method: 'POST', body: { password: $('#connect-password').value } });
+    token = result.token;
+    saved.set('asms.server', apiBase);
+    saved.set('asms.token', token);
+    saved.set('asms.mode', 'server');
+    $('#connect-password').value = '';
+    await showShell();
+  } catch (e) {
+    error.textContent = e.message === 'Please log in' ? 'Wrong password.' : e.message;
+  } finally {
+    if (button) button.disabled = false;
+  }
+});
+
+// …or look around with sample data.
+$('#try-demo').addEventListener('click', () => {
+  saved.set('asms.mode', 'demo');
+  location.reload();
+});
+$('#leave-demo').addEventListener('click', () => {
+  saved.set('asms.mode', null);
+  location.reload();
 });
 
 $('#tabs').addEventListener('click', (event) => {
@@ -1172,6 +1270,15 @@ async function renderLogs() {
 // start
 // ---------------------------------------------------------------------------
 (async () => {
+  await (window.AUTO_SMS_READY || Promise.resolve());
+  if (DEMO) {
+    $('#demo-banner').classList.remove('hidden');
+    $('#logout').textContent = 'Exit demo';
+  }
+  if (STATIC && !DEMO && !apiBase) {
+    showLogin();
+    return;
+  }
   try {
     const { loggedIn } = await api('/session');
     if (loggedIn) await showShell();
@@ -1180,3 +1287,8 @@ async function renderLogs() {
     showLogin();
   }
 })();
+
+// Installable like an app ("Add to Home Screen"), and opens without a connection.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => undefined);
+}

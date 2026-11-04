@@ -44,18 +44,22 @@ export class Auth {
     return crypto.createHmac('sha256', this.key).update(payload).digest('base64url');
   }
 
-  issue(res: Response, secure: boolean): void {
+  /** Sets the session cookie (same-site dashboard) and returns the same token for apps on other sites. */
+  issue(res: Response, secure: boolean): string {
     const payload = Buffer.from(JSON.stringify({ exp: Date.now() + MAX_AGE_MS })).toString('base64url');
     const token = `${payload}.${this.sign(payload)}`;
     res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'strict', secure, maxAge: MAX_AGE_MS, path: '/' });
+    return token;
   }
 
   clear(res: Response): void {
     res.clearCookie(COOKIE, { path: '/' });
   }
 
+  /** Accepts the session cookie, or "Authorization: Bearer <token>" from the phone app on GitHub Pages. */
   isValid(req: Request): boolean {
-    const token = parseCookies(req.headers.cookie)[COOKIE];
+    const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
+    const token = bearer ?? parseCookies(req.headers.cookie)[COOKIE];
     if (!token) return false;
     const [payload, signature] = token.split('.');
     if (!payload || !signature) return false;

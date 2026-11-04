@@ -737,3 +737,44 @@ dialog::backdrop {
     height: 220px;
   }
 }
+
+/* ---------- welcome (the app on GitHub Pages) ---------- */
+.welcome-card {
+  max-width: 420px;
+}
+
+.welcome-card form button.primary,
+button.wide {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.welcome-title {
+  margin: 20px 0 0;
+  font-size: 16px;
+}
+
+.welcome-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.welcome-or::before,
+.welcome-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.welcome-note {
+  margin-top: 16px;
+  line-height: 1.5;
+}
+
+.demo-banner button {
+  margin-left: 8px;
+}

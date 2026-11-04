@@ -2,12 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Auto SMS for ERPNext</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23128c6e'/%3E%3Cpath d='M9 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z' fill='white'/%3E%3C/svg%3E" />
+    <meta name="description" content="Send your ERPNext invoices and reports to WhatsApp automatically." />
+    <meta name="theme-color" content="#128c6e" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Auto SMS" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- Log in (dashboard served by your own server) -->
     <div id="login" class="login hidden">
       <form id="login-form" class="card login-card">
         <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
@@ -18,7 +26,36 @@
       </form>
     </div>
 
+    <!-- Welcome (the app on GitHub Pages): connect to your server, or try the demo -->
+    <div id="welcome" class="login hidden">
+      <div class="card login-card welcome-card">
+        <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
+        <p class="muted">Sends your ERPNext invoices and reports to WhatsApp, automatically.</p>
+        <form id="connect-form">
+          <h2 class="welcome-title">Connect to your server</h2>
+          <label>
+            Server address
+            <span class="hint">Where Auto SMS runs, e.g. https://sms.yourcompany.com</span>
+            <input id="connect-url" type="text" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="https://sms.yourcompany.com" required />
+          </label>
+          <label>Password <input id="connect-password" type="password" autocomplete="current-password" required /></label>
+          <button type="submit" class="primary">Connect</button>
+          <p id="connect-error" class="error-text"></p>
+        </form>
+        <div class="welcome-or"><span>or</span></div>
+        <button id="try-demo" class="wide">Look around with sample data</button>
+        <p class="hint welcome-note">
+          This app is the remote control. Your server sends the messages, even when your phone is off.
+          No server yet? <a href="https://github.com/aliiherzi/auto-sms-for-erpnext#2-install-it-on-your-server" target="_blank" rel="noopener">How to install it</a>
+        </p>
+      </div>
+    </div>
+
     <div id="shell" class="hidden">
+      <div id="demo-banner" class="demo-banner hidden" role="note">
+        <strong>Demo with sample data.</strong> Nothing here is real and nothing is sent.
+        <button id="leave-demo" class="small">Connect your server</button>
+      </div>
       <header class="topbar">
         <div class="brand"><span class="logo" aria-hidden="true"></span><span>Auto SMS <span class="muted">for ERPNext</span></span></div>
         <div class="pills" id="pills"></div>
@@ -40,6 +77,8 @@
       </main>
     </div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
+    <script src="config.js"></script>
+    <script src="boot.js"></script>
     <script src="app.js" type="module"></script>
   </body>
 </html>

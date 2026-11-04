@@ -159,10 +159,16 @@ export class App {
     this.outbox.start();
     this.watcher.start();
     this.reports.reload();
-    this.checkTimer = setInterval(() => {
-      void this.refreshErpCheck();
-      this.db.pruneAttachments();
-    }, 5 * 60_000);
+    let ticks = 0;
+    this.checkTimer = setInterval(async () => {
+      ticks++;
+      // Check ERPNext every 5 minutes, or every minute while it can't be reached.
+      if (!this.lastErpCheck?.ok || ticks % 5 === 0) await this.refreshErpCheck();
+      // If ERPNext was unreachable at start-up, schedules began in the server's time zone:
+      // move them to ERPNext's time zone as soon as it answers.
+      if (this.reports.timezone !== this.context.fallbackTimezone()) this.reports.reload();
+      if (ticks % 5 === 0) this.db.pruneAttachments();
+    }, 60_000);
     this.checkTimer.unref();
   }
 

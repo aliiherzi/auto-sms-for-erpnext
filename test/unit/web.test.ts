@@ -111,6 +111,32 @@ describe('dashboard API (no ERPNext needed)', () => {
     expect(processed).toEqual([['Sales Invoice', 'ACC-SINV-2026-00042']]);
   });
 
+  it('lets the app on GitHub Pages use the API with a login token (and nobody else)', async () => {
+    const pages = 'https://aliiherzi.github.io';
+    const preflight = await fetch(`${base}/api/status`, {
+      method: 'OPTIONS',
+      headers: { Origin: pages, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization' },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(pages);
+    expect(preflight.headers.get('access-control-allow-headers')).toMatch(/Authorization/);
+
+    const stranger = await fetch(`${base}/api/status`, { method: 'OPTIONS', headers: { Origin: 'https://evil.example', 'Access-Control-Request-Method': 'GET' } });
+    expect(stranger.headers.get('access-control-allow-origin')).toBeNull();
+
+    const session: any = await (await fetch(`${base}/api/session`, { headers: { Origin: pages } })).json();
+    expect(session).toEqual({ loggedIn: false, app: 'auto-sms-for-erpnext' });
+
+    const login: any = await (
+      await fetch(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: pages }, body: JSON.stringify({ password: 'web-test-password' }) })
+    ).json();
+    expect(login.token).toMatch(/^[\w-]+\.[\w-]+$/);
+    const withToken = await fetch(`${base}/api/status`, { headers: { Origin: pages, Authorization: `Bearer ${login.token}` } });
+    expect(withToken.status).toBe(200);
+    expect(withToken.headers.get('access-control-allow-origin')).toBe(pages);
+    expect((await fetch(`${base}/api/status`, { headers: { Authorization: 'Bearer forged.token' } })).status).toBe(401);
+  });
+
   it('serves the dashboard page', async () => {
     const page = await fetch(`${base}/`);
     expect(page.status).toBe(200);

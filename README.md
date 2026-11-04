@@ -15,6 +15,23 @@ A small standalone service that connects **ERPNext** to **WhatsApp**. It runs ne
 
 ![Dashboard overview](docs/dashboard-overview.png)
 
+## 📱 The app: https://aliiherzi.github.io/auto-sms-for-erpnext/
+
+Open that link on your **iPhone, Android, Mac or PC**, like [Habit For Me](https://aliiherzi.github.io/Habit-For-Me/):
+
+- **Look around with sample data**: every screen works with example invoices, numbers and reports. Nothing is sent.
+- **Connect to your server**: type your Auto SMS server's address (e.g. `https://sms.yourcompany.com`) and its password. The app now controls the real thing: linking WhatsApp, settings, messages and reports.
+
+**Install it like an app:**
+
+- **iPhone / iPad:** open the link in **Safari** → **Share** → **Add to Home Screen**
+- **Android:** open it in **Chrome** → **⋮** → **Install app** (or **Add to Home screen**)
+- **Mac / PC:** in Chrome or Edge, the **install** icon in the address bar
+
+Why a server too? The app is the remote control. Sending invoices the moment they're submitted and reports at 8 PM must happen even when your phone is off, so that part runs on a server that's always on (setup below). The app only talks to *your* server: GitHub sees nothing of your data.
+
+> Connecting needs your server's **https://** address ([Your own web address](#your-own-web-address-https)). To try the app with Auto SMS running on your own computer, use Chrome and the address `http://localhost:3000`.
+
 ---
 
 ## How it works
@@ -49,20 +66,14 @@ It must run on a server that is **always on** and can reach your ERPNext and the
 
 Open a terminal on the server. On Hostinger: **hPanel → VPS → your server → Browser terminal** (works on a phone too), or SSH. Then:
 
-**a) Download the code.** The repository is private, so log in to GitHub once:
+**a) Download the code:**
 
 ```bash
-apt-get update && apt-get install -y git gh
+apt-get update && apt-get install -y git
 ```
 
 ```bash
-gh auth login
-```
-
-Choose *GitHub.com → HTTPS → Login with a web browser*. It shows a code: open **github.com/login/device** on your phone, enter the code and approve. Then:
-
-```bash
-gh repo clone aliiherzi/auto-sms-for-erpnext /opt/auto-sms
+git clone https://github.com/aliiherzi/auto-sms-for-erpnext /opt/auto-sms
 ```
 
 **b) Install and start:**
@@ -454,6 +465,8 @@ src/
   invoices/               invoice → messages, and the watcher (polling)
   reports/                the report builders and the scheduler
   web/                    dashboard API, login, webhook, static dashboard (public/)
+demo/                     sample data + pretend server for the app's demo mode
+scripts/build-pages.mjs   builds the app for GitHub Pages (published by .github/workflows/pages.yml)
 test/                     unit tests and the real-ERPNext end-to-end suite
 ```
 

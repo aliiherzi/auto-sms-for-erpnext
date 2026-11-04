@@ -58,6 +58,8 @@ export interface RunResult {
 export class ReportScheduler {
   private jobs = new Map<string, Cron>();
   private readonly log: Logger;
+  /** Time zone the current jobs were scheduled in. */
+  timezone: string | null = null;
 
   constructor(
     private readonly deps: {
@@ -77,6 +79,7 @@ export class ReportScheduler {
     this.stop();
     const settings = this.deps.settings();
     const timezone = this.deps.context.fallbackTimezone();
+    this.timezone = timezone;
     for (const report of settings.reports.items) {
       if (!report.enabled) continue;
       try {
