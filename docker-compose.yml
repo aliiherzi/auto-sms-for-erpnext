@@ -1,0 +1,17 @@
+services:
+  auto-sms:
+    build: .
+    image: auto-sms-for-erpnext:latest
+    container_name: auto-sms-for-erpnext
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    ports:
+      - "3000:3000"
+    volumes:
+      # Settings, message log and the WhatsApp sessions live here – back it up.
+      - auto-sms-data:/data
+
+volumes:
+  auto-sms-data:

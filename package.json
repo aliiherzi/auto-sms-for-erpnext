@@ -14,8 +14,7 @@
     "dev": "tsx watch --disable-warning=ExperimentalWarning src/main.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test/unit",
-    "test:integration": "vitest run test/integration",
-    "seed:erpnext": "tsx scripts/seed-erpnext.ts"
+    "test:integration": "vitest run test/integration"
   },
   "license": "UNLICENSED",
   "dependencies": {
