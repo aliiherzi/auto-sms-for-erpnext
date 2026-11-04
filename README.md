@@ -39,9 +39,54 @@ A small standalone service that connects **ERPNext** to **WhatsApp**. It runs ne
 2. Give it these roles: **Accounts User, Sales User, Purchase User, Stock User**. It only needs to read.
 3. Open the user → **Settings → API Access → Generate Keys**. Copy the **API Key** and **API Secret**.
 
-### 2. Start the service (Docker)
+### 2. Install it on your server
 
-On any server that can reach your ERPNext and the internet (it can be the ERPNext server itself):
+It must run on a server that is **always on** and can reach your ERPNext and the internet, for example the same Hostinger VPS where ERPNext runs. (A static host like GitHub Pages can't run it: it keeps a live WhatsApp connection and checks ERPNext all day.) You then open the dashboard from any phone or computer.
+
+Open a terminal on the server. On Hostinger: **hPanel → VPS → your server → Browser terminal** (works on a phone too), or SSH. Then:
+
+**a) Download the code.** The repository is private, so log in to GitHub once:
+
+```bash
+apt-get update && apt-get install -y git gh
+```
+
+```bash
+gh auth login
+```
+
+Choose *GitHub.com → HTTPS → Login with a web browser*. It shows a code: open **github.com/login/device** on your phone, enter the code and approve. Then:
+
+```bash
+gh repo clone aliiherzi/auto-sms-for-erpnext /opt/auto-sms
+```
+
+**b) Install and start:**
+
+```bash
+sudo bash /opt/auto-sms/install.sh
+```
+
+It installs Docker if needed, creates `/opt/auto-sms/.env` with a strong dashboard password, picks a free port (3000, or the next free one), starts the service and prints:
+
+```
+==> Auto SMS for ERPNext is running.
+   Dashboard: http://203.0.113.10:3000
+   Password:  …
+```
+
+Open that address on your phone or computer and log in. If it doesn't open, allow the port in the server's firewall (Hostinger: *hPanel → VPS → Security → Firewall*, add TCP 3000; or `ufw allow 3000/tcp`).
+
+**Update later** (keeps your settings, WhatsApp links and history):
+
+```bash
+cd /opt/auto-sms && git pull && sudo bash install.sh
+```
+
+> The printed address uses plain `http`. For daily use give it a name with HTTPS, see [Your own web address](#your-own-web-address-https) below.
+
+<details>
+<summary>Manual install with Docker (any server)</summary>
 
 ```bash
 git clone https://github.com/aliiherzi/auto-sms-for-erpnext.git
@@ -55,15 +100,15 @@ cd auto-sms-for-erpnext
 cp .env.example .env
 ```
 
-Edit `.env`: set `ADMIN_PASSWORD`. Optionally put the ERPNext URL, key and secret there, or enter them later in the dashboard. Then:
+Edit `.env` and set `ADMIN_PASSWORD`, then:
 
 ```bash
 docker compose up -d --build
 ```
 
-Open **http://your-server:3000** and log in with `ADMIN_PASSWORD`.
+Open **http://your-server:3000**.
 
-> For access over the internet, put the dashboard behind HTTPS (nginx, Traefik, Caddy…) and set `TRUST_PROXY=true`.
+</details>
 
 ### 3. Connect ERPNext
 
@@ -247,7 +292,7 @@ Without a webhook, new invoices are picked up within a minute. For instant sendi
 | Name | `WhatsApp – Sales Invoice` |
 | DocType | `Sales Invoice` |
 | Doc Event | `on_submit` |
-| Request URL | `http://your-server:3000/webhooks/erpnext` |
+| Request URL | `https://sms.yourcompany.com/webhooks/erpnext`, or `http://127.0.0.1:3000/webhooks/erpnext` when ERPNext runs on the same server without Docker |
 | Request Method | `POST` |
 | Request Structure | `JSON` |
 | JSON Request Body | `{"doctype": "{{ doc.doctype }}", "name": "{{ doc.name }}"}` |
@@ -256,6 +301,55 @@ Without a webhook, new invoices are picked up within a minute. For instant sendi
 Create a second one for `Purchase Invoice`. Calls without the correct signature are rejected. Checking every minute stays on as a safety net, and nothing is sent twice.
 
 ---
+
+## Your own web address (HTTPS)
+
+Give the dashboard a name such as `https://sms.yourcompany.com`, so your password and messages travel encrypted and it opens like any website, on phone and computer.
+
+1. **DNS.** Where your domain is managed (Hostinger: *hPanel → Domains → DNS / Nameservers*), add an **A record**: name `sms`, points to your server's IP address.
+2. **Hide the plain-http port.** In `/opt/auto-sms/.env` set these two lines, then run `sudo bash /opt/auto-sms/install.sh` again:
+
+   ```
+   BIND_ADDRESS=127.0.0.1
+   TRUST_PROXY=true
+   ```
+
+3. **Add HTTPS.** How depends on what already answers on ports 80/443 of the server. Use the port install.sh printed if it isn't 3000.
+
+   **nginx** (the usual ERPNext "bench" production setup). Create `/etc/nginx/conf.d/auto-sms.conf`:
+
+   ```nginx
+   server {
+       listen 80;
+       server_name sms.yourcompany.com;
+       location / {
+           proxy_pass http://127.0.0.1:3000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+
+   Then reload nginx and get the certificate:
+
+   ```bash
+   nginx -t && systemctl reload nginx
+   ```
+
+   ```bash
+   apt-get install -y certbot python3-certbot-nginx && certbot --nginx -d sms.yourcompany.com
+   ```
+
+   **Nothing on 80/443 yet** (ERPNext runs on another server). [Install Caddy](https://caddyserver.com/docs/install#debian-ubuntu-raspbian), put this in `/etc/caddy/Caddyfile` and run `systemctl reload caddy`. It gets the certificate by itself:
+
+   ```
+   sms.yourcompany.com {
+       reverse_proxy 127.0.0.1:3000
+   }
+   ```
+
+   **Traefik** (ERPNext installed with frappe_docker). Add a router for `sms.yourcompany.com` to `http://<server-ip>:3000`, the same way your ERPNext site is set up.
 
 ## Running without Docker
 
@@ -282,11 +376,7 @@ Keep it running with your process manager (systemd, pm2…). All data lives in `
 ## Updating and backups
 
 ```bash
-git pull
-```
-
-```bash
-docker compose up -d --build
+cd /opt/auto-sms && git pull && sudo bash install.sh
 ```
 
 Everything the service keeps is in the `auto-sms-data` Docker volume (`/data`): `settings.json`, the message database, and `whatsapp-auth/` (the linked sessions). Back up that volume. If you lose `whatsapp-auth`, you only need to scan the QR codes again.

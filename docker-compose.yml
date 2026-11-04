@@ -7,8 +7,11 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /data
+      PORT: "3000"
     ports:
-      - "3000:3000"
+      # PUBLIC_PORT (default 3000) is the port on your server. Set BIND_ADDRESS=127.0.0.1 in .env
+      # when an HTTPS proxy (nginx, Traefik, Caddy) in front of it should be the only way in.
+      - "${BIND_ADDRESS:-0.0.0.0}:${PUBLIC_PORT:-3000}:3000"
     volumes:
       # Settings, message log and the WhatsApp sessions live here – back it up.
       - auto-sms-data:/data
