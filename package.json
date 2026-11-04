@@ -1,0 +1,38 @@
+{
+  "name": "auto-sms-for-erpnext",
+  "version": "1.0.0",
+  "description": "Standalone service that connects ERPNext to WhatsApp: scheduled reports to WhatsApp groups and automatic customer & supplier invoice delivery.",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-public.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/main.js",
+    "dev": "tsx watch --disable-warning=ExperimentalWarning src/main.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "seed:erpnext": "tsx scripts/seed-erpnext.ts"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "baileys": "7.0.0-rc14",
+    "croner": "11.0.0",
+    "express": "5.3.0",
+    "https-proxy-agent": "9.1.0",
+    "pino": "9.14.0",
+    "qrcode": "1.5.4",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/node": "22.19.1",
+    "@types/qrcode": "1.5.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Auto SMS for ERPNext</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23128c6e'/%3E%3Cpath d='M9 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="login" class="login hidden">
+      <form id="login-form" class="card login-card">
+        <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
+        <p class="muted">Enter the dashboard password (ADMIN_PASSWORD).</p>
+        <label>Password <input id="login-password" type="password" autocomplete="current-password" required /></label>
+        <button type="submit" class="primary">Log in</button>
+        <p id="login-error" class="error-text"></p>
+      </form>
+    </div>
+
+    <div id="shell" class="hidden">
+      <header class="topbar">
+        <div class="brand"><span class="logo" aria-hidden="true"></span><span>Auto SMS <span class="muted">for ERPNext</span></span></div>
+        <div class="pills" id="pills"></div>
+        <button id="logout" class="ghost small">Log out</button>
+      </header>
+      <nav class="tabs" id="tabs">
+        <button data-tab="overview" class="active">Overview</button>
+        <button data-tab="settings">Settings</button>
+        <button data-tab="activity">Activity</button>
+        <button data-tab="tools">Tools</button>
+        <button data-tab="logs">Logs</button>
+      </nav>
+      <main>
+        <section id="tab-overview" class="tab"></section>
+        <section id="tab-settings" class="tab hidden"></section>
+        <section id="tab-activity" class="tab hidden"></section>
+        <section id="tab-tools" class="tab hidden"></section>
+        <section id="tab-logs" class="tab hidden"></section>
+      </main>
+    </div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
