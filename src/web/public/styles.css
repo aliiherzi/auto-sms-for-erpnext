@@ -743,10 +743,14 @@ dialog::backdrop {
   max-width: 420px;
 }
 
-.welcome-card form button.primary,
+.welcome-card form button,
 button.wide {
   width: 100%;
   margin-top: 16px;
+}
+
+.welcome-card > .hint {
+  text-align: center;
 }
 
 .welcome-title {
@@ -758,9 +762,10 @@ button.wide {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 0 2px;
+  margin: 26px 0 4px;
   color: var(--muted);
   font-size: 13px;
+  text-align: center;
 }
 
 .welcome-or::before,

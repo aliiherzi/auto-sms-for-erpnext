@@ -26,24 +26,28 @@
       </form>
     </div>
 
-    <!-- Welcome (the app on GitHub Pages): connect to your server, or try the demo -->
+    <!-- Welcome (the app on GitHub Pages): try the demo, or connect to your installed server -->
     <div id="welcome" class="login hidden">
       <div class="card login-card welcome-card">
         <div class="brand"><span class="logo" aria-hidden="true"></span>Auto SMS for ERPNext</div>
         <p class="muted">Sends your ERPNext invoices and reports to WhatsApp, automatically.</p>
+        <button id="try-demo" class="primary wide">Look around with sample data</button>
+        <p class="hint">Every screen works with example invoices and reports. Nothing is sent.</p>
+        <div class="welcome-or"><span>already installed Auto SMS on your server?</span></div>
         <form id="connect-form">
-          <h2 class="welcome-title">Connect to your server</h2>
           <label>
-            Server address
-            <span class="hint">Where Auto SMS runs, e.g. https://sms.yourcompany.com</span>
-            <input id="connect-url" type="text" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false" placeholder="https://sms.yourcompany.com" required />
+            Your Auto SMS server address
+            <span class="hint">Not an email. It's the web address you get after installing, like https://sms.yourcompany.com</span>
+            <input id="connect-url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://sms.yourcompany.com" required />
           </label>
-          <label>Password <input id="connect-password" type="password" autocomplete="current-password" required /></label>
-          <button type="submit" class="primary">Connect</button>
+          <label>
+            Dashboard password
+            <span class="hint">The one shown when you installed Auto SMS, not your email password.</span>
+            <input id="connect-password" type="password" autocomplete="off" required />
+          </label>
+          <button type="submit" class="wide">Connect</button>
           <p id="connect-error" class="error-text"></p>
         </form>
-        <div class="welcome-or"><span>or</span></div>
-        <button id="try-demo" class="wide">Look around with sample data</button>
         <p class="hint welcome-note">
           This app is the remote control. Your server sends the messages, even when your phone is off.
           No server yet? <a href="https://github.com/aliiherzi/auto-sms-for-erpnext#2-install-it-on-your-server" target="_blank" rel="noopener">How to install it</a>
@@ -53,7 +57,7 @@
 
     <div id="shell" class="hidden">
       <div id="demo-banner" class="demo-banner hidden" role="note">
-        <strong>Demo with sample data.</strong> Nothing here is real and nothing is sent.
+        <strong>Demo with sample data.</strong> Nothing here is real and nothing is sent. When Auto SMS is installed on your server:
         <button id="leave-demo" class="small">Connect your server</button>
       </div>
       <header class="topbar">

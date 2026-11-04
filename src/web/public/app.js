@@ -48,7 +48,9 @@ const saved = {
     }
   },
 };
-const DEMO = STATIC && saved.get('asms.mode') === 'demo';
+// First visit opens the demo; 'connect' shows the connect screen; 'server' uses your server.
+const MODE = saved.get('asms.mode');
+const DEMO = STATIC && (MODE === null || MODE === 'demo');
 let apiBase = STATIC && !DEMO ? saved.get('asms.server') || '' : '';
 let token = STATIC && !DEMO ? saved.get('asms.token') : null;
 
@@ -296,7 +298,7 @@ $('#login-form').addEventListener('submit', async (event) => {
 
 $('#logout').addEventListener('click', async () => {
   if (DEMO) {
-    saved.set('asms.mode', null);
+    saved.set('asms.mode', 'connect');
     location.reload();
     return;
   }
@@ -314,7 +316,15 @@ $('#connect-form').addEventListener('submit', async (event) => {
   const error = $('#connect-error');
   error.textContent = '';
   let url = $('#connect-url').value.trim().replace(/\/+$/, '');
+  if (url.includes('@')) {
+    error.textContent = "That's an email address. Here you need the web address of your Auto SMS server, like https://sms.yourcompany.com. You get it when Auto SMS is installed on your server. Not installed yet? Use \u201cLook around with sample data\u201d above.";
+    return;
+  }
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  if (!/^https?:\/\/(localhost|127\.0\.0\.1|[^/\s]+\.[^/\s]+)(:\d+)?$/i.test(url)) {
+    error.textContent = 'Enter the full web address of your server, like https://sms.yourcompany.com';
+    return;
+  }
   const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
   if (location.protocol === 'https:' && url.startsWith('http://') && !local) {
     error.textContent = 'Use the https:// address of your server: phones and browsers block plain http:// from this app. (README → "Your own web address")';
@@ -347,7 +357,7 @@ $('#try-demo').addEventListener('click', () => {
   location.reload();
 });
 $('#leave-demo').addEventListener('click', () => {
-  saved.set('asms.mode', null);
+  saved.set('asms.mode', 'connect');
   location.reload();
 });
 
@@ -1273,7 +1283,7 @@ async function renderLogs() {
   await (window.AUTO_SMS_READY || Promise.resolve());
   if (DEMO) {
     $('#demo-banner').classList.remove('hidden');
-    $('#logout').textContent = 'Exit demo';
+    $('#logout').textContent = 'Connect server';
   }
   if (STATIC && !DEMO && !apiBase) {
     showLogin();
