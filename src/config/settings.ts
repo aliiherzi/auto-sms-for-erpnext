@@ -52,15 +52,13 @@ Amount: *{{grand_total}}*
 // Schema
 // ---------------------------------------------------------------------------
 
-const groupList = z.array(z.string()).default([]);
+const groupList = z.array(z.string()).default(() => []);
 
 function invoiceSettings(defaults: { partyMessage: string; groupMessage: string }) {
   return z.object({
     enabled: z.boolean().default(true),
     /** Send the invoice to the customer / supplier's own WhatsApp number. */
     sendToParty: z.boolean().default(true),
-    /** Also post a copy into these WhatsApp groups (group IDs). */
-    groups: groupList,
     attachPdf: z.boolean().default(true),
     /** ERPNext Print Format name; empty = the doctype's default print format. */
     printFormat: z.string().default(''),
@@ -80,7 +78,9 @@ const reportCommon = {
   enabled: z.boolean().default(true),
   /** Cron expression: minute hour day-of-month month day-of-week. */
   schedule: z.string().default('0 20 * * *'),
-  /** Target WhatsApp groups; empty = reports.defaultGroups. */
+  /** ERPNext company the report is about; empty = ERPNext's default company. */
+  company: z.string().default(''),
+  /** Target WhatsApp groups; empty = the report groups of the company's profile. */
   groups: groupList,
 };
 
@@ -116,7 +116,7 @@ const StockAlertsReport = z.object({
       maxItems: z.number().int().min(1).max(200).default(30),
       sendWhenEmpty: z.boolean().default(false),
       /** Limit to these warehouses; empty = all warehouses of the company. */
-      warehouses: z.array(z.string()).default([]),
+      warehouses: z.array(z.string()).default(() => []),
     })
     .prefault({}),
 });
@@ -127,7 +127,7 @@ const CashBankReport = z.object({
   options: z
     .object({
       /** Limit to these accounts; empty = every Bank and Cash account of the company. */
-      accounts: z.array(z.string()).default([]),
+      accounts: z.array(z.string()).default(() => []),
       hideZero: z.boolean().default(false),
     })
     .prefault({}),
@@ -141,9 +141,9 @@ const QueryReport = z.object({
       /** Any ERPNext report name, e.g. "Gross Profit" or "Accounts Receivable Summary". */
       reportName: z.string().default(''),
       /** Report filters. Values may use {{today}}, {{yesterday}}, {{week_start}}, {{month_start}}, {{year_start}}, {{company}}. */
-      filters: z.record(z.string(), z.unknown()).default({}),
+      filters: z.record(z.string(), z.unknown()).default(() => ({})),
       /** Column fieldnames to show in the text version; empty = first 4 columns. */
-      columns: z.array(z.string()).default([]),
+      columns: z.array(z.string()).default(() => []),
       maxRows: z.number().int().min(1).max(200).default(20),
       /** text = table in the message, csv = full report attached as a CSV file. */
       output: z.enum(['text', 'csv']).default('text'),
@@ -181,8 +181,36 @@ export const DEFAULT_REPORTS = [
   { id: 'cash-bank', type: 'cash_bank', schedule: '5 20 * * *' },
 ].map((r) => ReportSchema.parse(r));
 
+/** A linked WhatsApp number. Its session lives in DATA_DIR/whatsapp-auth/<id>. */
+export const AccountSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/, 'Account id: lowercase letters, digits and dashes'),
+  label: z.string().default(''),
+});
+
+/** Which WhatsApp number (and which groups) an ERPNext company uses. */
+export const CompanyProfileSchema = z.object({
+  /** ERPNext company name; empty = every company without a profile of its own. */
+  company: z.string().default(''),
+  accountId: z.string().default('main'),
+  /** Groups that get a copy of each customer invoice. */
+  salesGroups: groupList,
+  /** Groups that get a copy of each supplier invoice. */
+  purchaseGroups: groupList,
+  /** Groups that receive this company's reports (unless a report picks its own). */
+  reportGroups: groupList,
+});
+
+export const DEFAULT_ACCOUNT_ID = 'main';
+
 export const SettingsSchema = z.object({
   version: z.literal(1).default(1),
+  whatsapp: z
+    .object({
+      accounts: z.array(AccountSchema).min(1, 'Keep at least one WhatsApp number').default(() => [{ id: DEFAULT_ACCOUNT_ID, label: 'Main number' }]),
+    })
+    .prefault({}),
+  /** One entry per company (or one catch-all entry with company ""). */
+  companies: z.array(CompanyProfileSchema).default(() => [{ company: '', accountId: DEFAULT_ACCOUNT_ID, salesGroups: [], purchaseGroups: [], reportGroups: [] }]),
   erpnext: z
     .object({
       url: z.string().default(''),
@@ -192,8 +220,6 @@ export const SettingsSchema = z.object({
     .prefault({}),
   general: z
     .object({
-      /** ERPNext company to report on; empty = the default company in ERPNext. */
-      company: z.string().default(''),
       /** IANA time zone, e.g. "Asia/Dubai"; empty = ERPNext's system time zone. */
       timezone: z.string().default(''),
       /** Used for local numbers like 050…; digits only, e.g. "971". */
@@ -223,9 +249,7 @@ export const SettingsSchema = z.object({
     .prefault({}),
   reports: z
     .object({
-      /** Groups used by every report that has no groups of its own. */
-      defaultGroups: groupList,
-      items: z.array(ReportSchema).default(DEFAULT_REPORTS),
+      items: z.array(ReportSchema).default(() => structuredClone(DEFAULT_REPORTS)),
     })
     .prefault({}),
 });
@@ -233,6 +257,36 @@ export const SettingsSchema = z.object({
 export type Settings = z.infer<typeof SettingsSchema>;
 export type ReportConfig = z.infer<typeof ReportSchema>;
 export type InvoiceSettings = Settings['invoices']['sales'];
+export type CompanyProfile = z.infer<typeof CompanyProfileSchema>;
+export type WhatsAppAccount = z.infer<typeof AccountSchema>;
+
+/** The profile for an ERPNext company: its own entry, else the catch-all entry, else none. */
+export function profileFor(settings: Settings, company: string): CompanyProfile | null {
+  return settings.companies.find((p) => p.company && p.company === company) ?? settings.companies.find((p) => !p.company) ?? null;
+}
+
+/** Cross-field checks zod can't express on its own. Returns a list of problems. */
+export function settingsProblems(settings: Settings): string[] {
+  const problems: string[] = [];
+  const accountIds = new Set<string>();
+  for (const account of settings.whatsapp.accounts) {
+    if (accountIds.has(account.id)) problems.push(`Two WhatsApp numbers share the id "${account.id}"`);
+    accountIds.add(account.id);
+  }
+  const companies = new Set<string>();
+  for (const profile of settings.companies) {
+    const name = profile.company || 'All other companies';
+    if (companies.has(profile.company)) problems.push(`"${name}" is listed twice under Companies`);
+    companies.add(profile.company);
+    if (!accountIds.has(profile.accountId)) problems.push(`"${name}" uses a WhatsApp number that doesn't exist (${profile.accountId})`);
+  }
+  const reportIds = new Set<string>();
+  for (const report of settings.reports.items) {
+    if (reportIds.has(report.id)) problems.push(`Two reports share the id "${report.id}"`);
+    reportIds.add(report.id);
+  }
+  return problems;
+}
 
 export function defaultSettings(): Settings {
   return SettingsSchema.parse({});
@@ -279,6 +333,8 @@ export class SettingsStore extends EventEmitter {
     if (!parsed.success) {
       throw new Error(`Invalid ${this.file}: ${formatZodError(parsed.error)}`);
     }
+    // Upgrade the file to the current shape so every option is visible in it.
+    if (JSON.stringify(raw) !== JSON.stringify(parsed.data)) this.write(parsed.data);
     return parsed.data;
   }
 
@@ -311,11 +367,8 @@ export class SettingsStore extends EventEmitter {
   update(input: unknown): Settings {
     const parsed = SettingsSchema.safeParse(input);
     if (!parsed.success) throw new SettingsValidationError(formatZodError(parsed.error));
-    const ids = new Set<string>();
-    for (const report of parsed.data.reports.items) {
-      if (ids.has(report.id)) throw new SettingsValidationError(`Two reports share the id "${report.id}"`);
-      ids.add(report.id);
-    }
+    const problems = settingsProblems(parsed.data);
+    if (problems.length) throw new SettingsValidationError(problems.join('; '));
     const previous = this.current;
     this.current = parsed.data;
     this.write(this.current);

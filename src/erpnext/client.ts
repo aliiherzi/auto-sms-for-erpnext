@@ -308,7 +308,7 @@ export class ErpNextClient {
     } catch (error) {
       if (error instanceof ErpNextError && error.status >= 500) {
         throw new ErpNextError(
-          `ERPNext could not create the PDF for ${doctype} ${name}: ${error.message}. ` +
+          `ERPNext could not create the PDF for ${doctype} ${name}: ${error.message.replace(/[.\s]+$/, '')}. ` +
             'Check that Print → PDF works for this invoice inside ERPNext. On ERPNext v16 the Chrome PDF renderer is downloaded on first use; ' +
             'if the ERPNext server has no internet access, choose "wkhtmltopdf" as PDF generator in this app\'s invoice settings.',
           error.status,

@@ -44,6 +44,7 @@ type WAVersion = [number, number, number];
 const GROUP_CACHE_MS = 60_000;
 const NUMBER_CACHE_MS = 24 * 3_600_000;
 const SENT_CACHE_SIZE = 500;
+const CONNECT_WATCHDOG_MS = 45_000;
 
 function statusCodeOf(error: unknown): number | undefined {
   const err = error as { output?: { statusCode?: number }; statusCode?: number } | undefined;
@@ -173,6 +174,21 @@ export class BaileysWhatsApp extends EventEmitter implements WhatsAppClient {
     });
     this.sock = sock;
 
+    // A connection attempt must reach WhatsApp (QR code or open) within 45 s; otherwise give up
+    // and retry. Without this, a firewall or proxy that silently blocks WhatsApp leaves it hanging.
+    const watchdog = setTimeout(() => {
+      if (generation !== this.generation) return;
+      if (this.state.status === 'connecting' || this.state.status === 'reconnecting') {
+        void sock.end(new Error('No answer from the WhatsApp servers (web.whatsapp.com). Check the internet connection or firewall of this server.'));
+      }
+    }, CONNECT_WATCHDOG_MS);
+    watchdog.unref();
+    // A proxy/firewall answering with an HTTP error is reported as "unexpected-response", not as an error.
+    sock.ws.on('unexpected-response', (_request: unknown, response: { statusCode?: number } | undefined) => {
+      if (generation !== this.generation) return;
+      void sock.end(new Error(`WhatsApp connection refused (HTTP ${response?.statusCode ?? '?'}). A proxy or firewall may be blocking web.whatsapp.com.`));
+    });
+
     sock.ev.on('creds.update', saveCreds);
     sock.ev.on('groups.update', (updates) => {
       for (const update of updates) {
@@ -205,6 +221,8 @@ export class BaileysWhatsApp extends EventEmitter implements WhatsAppClient {
         this.emit('connected');
         this.listGroups(true).catch((error) => this.log.warn({ err: error }, 'Could not load WhatsApp groups'));
       }
+
+      if (qr || connection === 'open' || connection === 'close') clearTimeout(watchdog);
 
       if (connection === 'close') {
         const error = lastDisconnect?.error as Error | undefined;

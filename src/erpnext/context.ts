@@ -12,7 +12,8 @@ export interface BusinessContext {
 const TTL_MS = 10 * 60_000;
 
 export class ContextResolver {
-  private cached?: { key: string; value: BusinessContext; at: number };
+  private cache = new Map<string, { value: BusinessContext; at: number }>();
+  private lastTimezone?: string;
 
   constructor(
     private readonly erp: () => ErpNextClient,
@@ -20,35 +21,40 @@ export class ContextResolver {
   ) {}
 
   invalidate(): void {
-    this.cached = undefined;
+    this.cache.clear();
   }
 
-  /** Time zone without asking ERPNext (used when ERPNext is unreachable). */
+  /** Time zone without asking ERPNext (used when ERPNext is unreachable and for schedules). */
   fallbackTimezone(): string {
     const configured = this.settings().general.timezone;
     if (isValidTimeZone(configured)) return configured;
-    if (this.cached) return this.cached.value.timezone;
+    if (this.lastTimezone) return this.lastTimezone;
     const envTz = process.env.TZ;
     if (envTz && isValidTimeZone(envTz)) return envTz;
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   }
 
-  async resolve(): Promise<BusinessContext> {
+  /**
+   * @param company a specific ERPNext company, or empty for ERPNext's default company
+   */
+  async resolve(company = ''): Promise<BusinessContext> {
     const s = this.settings();
-    const key = `${s.erpnext.url}|${s.general.company}|${s.general.timezone}`;
-    if (this.cached && this.cached.key === key && Date.now() - this.cached.at < TTL_MS) return this.cached.value;
+    const key = `${s.erpnext.url}|${company}|${s.general.timezone}`;
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
 
     const erp = this.erp();
-    const company = s.general.company || (await erp.getDefaultCompany()) || '';
-    if (!company) throw new Error('No company found in ERPNext. Create a company or choose one in Settings.');
-    const currency = await erp.getCompanyCurrency(company).catch(() => '');
+    const name = company || (await erp.getDefaultCompany()) || '';
+    if (!name) throw new Error('No company found in ERPNext. Create a company or choose one in Settings.');
+    const currency = await erp.getCompanyCurrency(name).catch(() => '');
     let timezone = s.general.timezone;
     if (!isValidTimeZone(timezone)) {
       const erpTz = await erp.getSystemTimeZone();
       timezone = erpTz && isValidTimeZone(erpTz) ? erpTz : this.fallbackTimezone();
     }
-    const value = { company, currency, timezone };
-    this.cached = { key, value, at: Date.now() };
+    this.lastTimezone = timezone;
+    const value = { company: name, currency, timezone };
+    this.cache.set(key, { value, at: Date.now() });
     return value;
   }
 }

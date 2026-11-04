@@ -619,6 +619,27 @@ details summary {
   color: #fff;
 }
 
+/* Tables become stacked cards on phones. */
+@media (max-width: 700px) {
+  table.stack-mobile thead {
+    display: none;
+  }
+  table.stack-mobile tr {
+    display: block;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  table.stack-mobile td {
+    display: block;
+    border: 0;
+    padding: 2px 0;
+    max-width: none;
+  }
+  table.stack-mobile td:empty {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .topbar {
     padding: 10px 16px;

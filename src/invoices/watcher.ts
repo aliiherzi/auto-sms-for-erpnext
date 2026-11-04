@@ -1,12 +1,14 @@
 /**
  * Watches ERPNext for newly submitted invoices (polling – nothing to install in ERPNext).
  *
- * How it avoids sending old invoices or sending twice:
- *  - on first start it remembers "now" (the newest modified timestamp) and today's date;
- *    only invoices dated from that day on are sent automatically
- *  - each poll asks for submitted invoices modified since the last checkpoint
- *  - every handled invoice is recorded locally (processed_docs), so payments or edits
- *    that touch an invoice again don't trigger a second message
+ * How it avoids sending old invoices, missing invoices, or sending twice:
+ *  - on first start it remembers the newest "modified" timestamp and today's date, and
+ *    marks the invoices of the last few minutes as already handled; only invoices dated
+ *    from that day on are sent automatically
+ *  - each poll asks for submitted invoices modified since the last checkpoint, minus a
+ *    10 minute overlap (a slow save can commit after a newer one)
+ *  - every handled invoice is recorded locally (processed_docs), so the overlap, payments
+ *    or edits that touch an invoice again never trigger a second message
  *  - invoices dated more than `maxAgeDays` ago are ignored by automatic sending
  */
 import type { Database } from '../db/database.js';
@@ -18,6 +20,16 @@ import { addDays, todayInTz } from '../util/time.js';
 import { INVOICE_DOCTYPES, type InvoiceDoctype, type InvoiceService } from './service.js';
 
 const PAGE = 100;
+export const OVERLAP_MINUTES = 10;
+
+/** Subtracts minutes from an ERPNext timestamp string ("YYYY-MM-DD HH:MM:SS[.ffffff]"). */
+export function minusMinutes(timestamp: string, minutes: number): string {
+  const match = timestamp.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (!match) return timestamp;
+  const date = new Date(`${match[1]}T${match[2]}Z`);
+  date.setUTCMinutes(date.getUTCMinutes() - minutes);
+  return date.toISOString().replace('T', ' ').slice(0, 19);
+}
 
 export class InvoiceWatcher {
   private timer?: NodeJS.Timeout;
@@ -75,9 +87,9 @@ export class InvoiceWatcher {
     let checked = 0;
     let processed = 0;
     try {
-      const ctx = await this.deps.context.resolve();
+      const timezone = (await this.deps.context.resolve()).timezone;
       for (const doctype of this.enabledDoctypes()) {
-        const result = await this.pollDoctype(doctype, erp, ctx.timezone, ctx.company);
+        const result = await this.pollDoctype(doctype, erp, timezone);
         checked += result.checked;
         processed += result.processed;
       }
@@ -101,7 +113,14 @@ export class InvoiceWatcher {
     return { checked, processed };
   }
 
-  private async pollDoctype(doctype: InvoiceDoctype, erp: ErpNextClient, timezone: string, company: string): Promise<{ checked: number; processed: number }> {
+  /** Company filter: every company when there is a catch-all profile, else only the listed ones. */
+  private companyFilter(): Filter | null {
+    const profiles = this.deps.settings().companies;
+    if (profiles.some((p) => !p.company)) return null;
+    return ['company', 'in', profiles.map((p) => p.company)];
+  }
+
+  private async pollDoctype(doctype: InvoiceDoctype, erp: ErpNextClient, timezone: string): Promise<{ checked: number; processed: number }> {
     const { db, settings } = this.deps;
     const keyCheckpoint = `watch:${doctype}:checkpoint`;
     const keyBaseline = `watch:${doctype}:baseline_date`;
@@ -118,6 +137,17 @@ export class InvoiceWatcher {
       });
       checkpoint = latest[0]?.modified ?? '1970-01-01 00:00:00';
       baseline = today;
+      // Invoices inside the overlap window existed before we started: never send them automatically.
+      if (latest.length) {
+        const recent = await erp.getAll<{ name: string }>(doctype, {
+          fields: ['name'],
+          filters: [
+            ['docstatus', '=', 1],
+            ['modified', '>=', minusMinutes(checkpoint, OVERLAP_MINUTES)],
+          ],
+        });
+        for (const row of recent) db.setProcessed(doctype, row.name, 'skipped', 'existed before the service started');
+      }
       db.setKv(keyCheckpoint, checkpoint);
       db.setKv(keyBaseline, baseline);
       this.log.info(`Started watching ${doctype}: invoices submitted from now on (dated ${baseline} or later) will be sent.`);
@@ -129,11 +159,11 @@ export class InvoiceWatcher {
     const minDate = baseline > oldestAllowed ? baseline : oldestAllowed;
     const filters: Filter[] = [
       ['docstatus', '=', 1],
-      ['modified', '>=', checkpoint],
+      ['modified', '>=', minusMinutes(checkpoint, OVERLAP_MINUTES)],
       ['posting_date', '>=', minDate],
     ];
-    // Only filter by company when one is chosen in Settings; otherwise watch every company.
-    if (settings().general.company) filters.push(['company', '=', company]);
+    const companyFilter = this.companyFilter();
+    if (companyFilter) filters.push(companyFilter);
 
     let newest = checkpoint;
     let checked = 0;

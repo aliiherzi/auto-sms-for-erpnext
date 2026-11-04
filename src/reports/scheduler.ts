@@ -7,7 +7,7 @@ import type { Database } from '../db/database.js';
 import type { ErpNextClient } from '../erpnext/client.js';
 import type { ContextResolver } from '../erpnext/context.js';
 import type { Outbox } from '../messaging/outbox.js';
-import { REPORT_TYPE_LABELS, type ReportConfig, type Settings } from '../config/settings.js';
+import { profileFor, REPORT_TYPE_LABELS, type ReportConfig, type Settings } from '../config/settings.js';
 import type { Logger } from '../util/logger.js';
 import { todayInTz } from '../util/time.js';
 import { cashBank } from './cash-bank.js';
@@ -47,6 +47,9 @@ export interface RunResult {
   text: string;
   empty: boolean;
   attachmentName?: string;
+  company: string;
+  /** The WhatsApp number (account id) that sends it. */
+  accountId: string | null;
   groups: string[];
   queued: number[];
   note?: string;
@@ -99,9 +102,9 @@ export class ReportScheduler {
     return out;
   }
 
-  private async context(): Promise<ReportContext> {
+  private async context(company: string): Promise<ReportContext> {
     const settings = this.deps.settings();
-    const business = await this.deps.context.resolve();
+    const business = await this.deps.context.resolve(company);
     return {
       ...business,
       erp: this.deps.erp(),
@@ -113,7 +116,7 @@ export class ReportScheduler {
 
   /** Builds a report without sending it (dashboard preview). */
   async preview(config: ReportConfig): Promise<ReportOutput> {
-    return buildReport(config, await this.context());
+    return buildReport(config, await this.context(config.company));
   }
 
   /**
@@ -127,9 +130,20 @@ export class ReportScheduler {
     const title = reportTitle(config);
     const runId = this.deps.db.startReportRun(config.id, trigger);
     try {
-      const output = await buildReport(config, await this.context());
-      const groups = (config.groups.length ? config.groups : settings.reports.defaultGroups).filter(Boolean);
-      const result: RunResult = { text: output.text, empty: output.empty, attachmentName: output.attachment?.fileName, groups, queued: [] };
+      const ctx = await this.context(config.company);
+      const output = await buildReport(config, ctx);
+      // The company's profile decides which WhatsApp number sends it and the default groups.
+      const profile = profileFor(settings, ctx.company);
+      const groups = (config.groups.length ? config.groups : profile?.reportGroups ?? []).filter(Boolean);
+      const result: RunResult = {
+        text: output.text,
+        empty: output.empty,
+        attachmentName: output.attachment?.fileName,
+        company: ctx.company,
+        accountId: profile?.accountId ?? null,
+        groups,
+        queued: [],
+      };
 
       if (output.empty && !sendWhenEmpty(config)) {
         result.note = 'Nothing to report, so nothing was sent.';
@@ -137,8 +151,14 @@ export class ReportScheduler {
         this.log.info(`Report "${title}": nothing to report`);
         return result;
       }
+      if (!profile) {
+        result.note = `No WhatsApp number is set up for company "${ctx.company}" (Settings → Companies).`;
+        this.deps.db.finishReportRun(runId, 'error', result.note);
+        this.log.warn(`Report "${title}" was not sent: ${result.note}`);
+        return result;
+      }
       if (!groups.length) {
-        result.note = 'No WhatsApp group selected for this report (Settings → Reports).';
+        result.note = 'No WhatsApp group selected for this report (Settings → Companies or the report itself).';
         this.deps.db.finishReportRun(runId, 'error', result.note);
         this.log.warn(`Report "${title}" was not sent: ${result.note}`);
         return result;
@@ -147,6 +167,7 @@ export class ReportScheduler {
       const attachmentId = output.attachment ? this.deps.db.addAttachment(output.attachment.fileName, output.attachment.mimetype, output.attachment.data) : null;
       for (const jid of groups) {
         const id = this.deps.outbox.enqueue({
+          accountId: profile.accountId,
           kind: 'report',
           refDoctype: 'Report',
           refName: title,

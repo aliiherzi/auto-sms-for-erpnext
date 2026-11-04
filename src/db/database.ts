@@ -17,6 +17,8 @@ export type Audience = 'party' | 'group' | 'test' | 'direct';
 
 export interface MessageRow {
   id: number;
+  /** Which linked WhatsApp number sends it. */
+  account_id: string;
   kind: MessageKind;
   ref_doctype: string | null;
   ref_name: string | null;
@@ -38,6 +40,7 @@ export interface MessageRow {
 }
 
 export interface NewMessage {
+  accountId: string;
   kind: MessageKind;
   refDoctype?: string | null;
   refName?: string | null;
@@ -95,6 +98,7 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id TEXT NOT NULL DEFAULT 'main',
   kind TEXT NOT NULL,
   ref_doctype TEXT,
   ref_name TEXT,
@@ -147,6 +151,14 @@ export class Database {
     this.db = new DatabaseSync(file);
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  private migrate(): void {
+    const columns = this.db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>;
+    if (!columns.some((c) => c.name === 'account_id')) {
+      this.db.exec("ALTER TABLE messages ADD COLUMN account_id TEXT NOT NULL DEFAULT 'main'");
+    }
   }
 
   close(): void {
@@ -196,12 +208,13 @@ export class Database {
     const ts = now();
     const result = this.db
       .prepare(
-        `INSERT INTO messages(kind, ref_doctype, ref_name, audience, recipient, recipient_name, body, attachment_id,
+        `INSERT INTO messages(account_id, kind, ref_doctype, ref_name, audience, recipient, recipient_name, body, attachment_id,
            attachment_name, status, error, dedupe_key, created_at, updated_at)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(dedupe_key) DO NOTHING`,
       )
       .run(
+        message.accountId,
         message.kind,
         message.refDoctype ?? null,
         message.refName ?? null,
@@ -224,15 +237,27 @@ export class Database {
     return (this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as unknown as MessageRow | undefined) ?? null;
   }
 
-  nextQueuedMessage(): MessageRow | null {
+  /** Next message due for one WhatsApp number (or for any number when accountId is omitted). */
+  nextQueuedMessage(accountId?: string): MessageRow | null {
+    const forAccount = accountId === undefined ? '' : 'AND account_id = ?';
+    const params: string[] = [now()];
+    if (accountId !== undefined) params.push(accountId);
     return (
       (this.db
         .prepare(
-          `SELECT * FROM messages WHERE status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+          `SELECT * FROM messages WHERE status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ${forAccount}
            ORDER BY id LIMIT 1`,
         )
-        .get(now()) as unknown as MessageRow | undefined) ?? null
+        .get(...params) as unknown as MessageRow | undefined) ?? null
     );
+  }
+
+  /** When a WhatsApp number is removed, its waiting messages can't be sent any more. */
+  failQueuedForAccount(accountId: string, reason: string): number {
+    const result = this.db
+      .prepare(`UPDATE messages SET status = 'failed', error = ?, next_attempt_at = NULL, updated_at = ? WHERE account_id = ? AND status IN ('queued','sending')`)
+      .run(reason, now(), accountId);
+    return Number(result.changes);
   }
 
   markSending(id: number): void {

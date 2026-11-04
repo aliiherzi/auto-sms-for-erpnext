@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { App } from '../app.js';
 import { DATE_FORMATS } from '../util/time.js';
-import { REPORT_TYPE_LABELS, ReportSchema, SettingsValidationError, type Settings } from '../config/settings.js';
+import { profileFor, REPORT_TYPE_LABELS, ReportSchema, SettingsValidationError, type Settings } from '../config/settings.js';
 import { ErpNextClient, ErpNextError } from '../erpnext/client.js';
 import { isInvoiceDoctype } from '../invoices/service.js';
 import { reportTitle } from '../reports/scheduler.js';
@@ -44,7 +44,7 @@ export function createServer(app: App) {
   });
 
   server.get('/healthz', (_req, res) => {
-    res.json({ ok: true, whatsapp: app.whatsapp.getState().status, erpnext: app.lastErpCheck?.ok ?? false });
+    res.json({ ok: true, whatsapp: Object.fromEntries(app.whatsapp.list().map((a) => [a.id, a.state.status])), erpnext: app.lastErpCheck?.ok ?? false });
   });
 
   // -- ERPNext webhook (raw body needed for the signature) ---------------------
@@ -122,21 +122,28 @@ export function createServer(app: App) {
     const nextRuns = app.reports.nextRuns();
     const lastRuns = app.db.lastReportRuns();
     res.json({
-      whatsapp: app.whatsapp.getState(),
+      whatsapp: app.whatsapp.list(),
       erpnext: { url: settings.erpnext.url, ...(app.lastErpCheck ?? { ok: false }) },
+      companies: settings.companies,
       testMode: settings.general.testMode,
       watcher: app.watcher.status(),
       counts: app.db.messageCounts(),
-      reports: settings.reports.items.map((r) => ({
-        id: r.id,
-        title: reportTitle(r),
-        type: r.type,
-        enabled: r.enabled,
-        schedule: r.schedule,
-        groups: r.groups.length ? r.groups : settings.reports.defaultGroups,
-        nextRun: nextRuns[r.id] ?? null,
-        lastRun: lastRuns[r.id] ?? null,
-      })),
+      reports: settings.reports.items.map((r) => {
+        const company = r.company || app.lastErpCheck?.company || '';
+        const profile = profileFor(settings, company);
+        return {
+          id: r.id,
+          title: reportTitle(r),
+          type: r.type,
+          enabled: r.enabled,
+          schedule: r.schedule,
+          company,
+          accountId: profile?.accountId ?? null,
+          groups: r.groups.length ? r.groups : profile?.reportGroups ?? [],
+          nextRun: nextRuns[r.id] ?? null,
+          lastRun: lastRuns[r.id] ?? null,
+        };
+      }),
       warnings: app.warnings(),
     });
   });
@@ -207,31 +214,70 @@ export function createServer(app: App) {
     });
   });
 
-  // -- WhatsApp --------------------------------------------------------------
-  api.post('/whatsapp/link', async (_req, res) => {
-    await app.whatsapp.startLinking();
-    res.json(app.whatsapp.getState());
+  // -- WhatsApp numbers ------------------------------------------------------
+  const client = (id: string) => {
+    const wa = app.whatsapp.get(id);
+    if (!wa) throw new HttpError(404, 'Unknown WhatsApp number');
+    return wa;
+  };
+
+  api.post('/whatsapp/accounts', async (req, res) => {
+    const label = String(req.body?.label ?? '').trim();
+    if (!label) throw new HttpError(400, 'Give the number a name, e.g. "Dubai branch"');
+    res.json(await app.addAccount(label));
   });
 
-  api.post('/whatsapp/pairing-code', async (req, res) => {
+  api.patch('/whatsapp/accounts/:id', (req, res) => {
+    client(req.params.id);
+    app.renameAccount(req.params.id, String(req.body?.label ?? ''));
+    res.json({ ok: true });
+  });
+
+  api.delete('/whatsapp/accounts/:id', async (req, res) => {
+    try {
+      await app.removeAccount(req.params.id);
+    } catch (error) {
+      throw new HttpError(409, (error as Error).message);
+    }
+    res.json({ ok: true });
+  });
+
+  api.post('/whatsapp/accounts/:id/link', async (req, res) => {
+    const wa = client(req.params.id);
+    await wa.startLinking();
+    res.json(wa.getState());
+  });
+
+  api.post('/whatsapp/accounts/:id/pairing-code', async (req, res) => {
+    const wa = client(req.params.id);
     const phone = String(req.body?.phone ?? '');
     const digits = normalizePhone(phone, app.settings().general.defaultCountryCode);
     if (!digits) throw new HttpError(400, 'Enter the WhatsApp number with its country code, e.g. +971501234567');
-    const code = await app.whatsapp.requestPairingCode(digits);
-    res.json({ code });
+    res.json({ code: await wa.requestPairingCode(digits) });
   });
 
-  api.post('/whatsapp/logout', async (_req, res) => {
-    await app.whatsapp.logout();
-    res.json(app.whatsapp.getState());
+  api.post('/whatsapp/accounts/:id/logout', async (req, res) => {
+    const wa = client(req.params.id);
+    await wa.logout();
+    res.json(wa.getState());
   });
 
+  /** Groups of every linked number: { accounts: { [id]: { connected, groups } } } */
   api.get('/whatsapp/groups', async (req, res) => {
-    if (!app.whatsapp.isConnected()) {
-      res.json({ groups: [], connected: false });
-      return;
+    const accounts: Record<string, { connected: boolean; groups: unknown[]; error?: string }> = {};
+    for (const { id } of app.whatsapp.list()) {
+      const wa = app.whatsapp.get(id)!;
+      if (!wa.isConnected()) {
+        accounts[id] = { connected: false, groups: [] };
+        continue;
+      }
+      try {
+        accounts[id] = { connected: true, groups: await wa.listGroups(req.query.refresh === '1') };
+      } catch (error) {
+        accounts[id] = { connected: true, groups: [], error: (error as Error).message };
+      }
     }
-    res.json({ groups: await app.whatsapp.listGroups(req.query.refresh === '1'), connected: true });
+    res.json({ accounts });
   });
 
   // -- messages --------------------------------------------------------------
@@ -264,12 +310,14 @@ export function createServer(app: App) {
   });
 
   api.post('/test-message', (req, res) => {
+    const accountId = String(req.body?.accountId ?? app.settings().whatsapp.accounts[0].id);
+    client(accountId);
     const to = String(req.body?.to ?? '').trim();
     const text = String(req.body?.text ?? '').trim() || '✅ Test message from Auto SMS for ERPNext';
     if (!to) throw new HttpError(400, 'Enter a phone number or choose a group');
     const recipient = isJid(to) || isGroupJid(to) ? to : normalizePhone(to, app.settings().general.defaultCountryCode);
     if (!recipient) throw new HttpError(400, `"${to}" is not a valid phone number. Use the international format, e.g. +971501234567`);
-    const id = app.outbox.enqueue({ kind: 'test', audience: 'direct', recipient, body: text });
+    const id = app.outbox.enqueue({ accountId, kind: 'test', audience: 'direct', recipient, body: text });
     res.json({ ok: true, id });
   });
 

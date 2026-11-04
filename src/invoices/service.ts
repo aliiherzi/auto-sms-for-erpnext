@@ -7,7 +7,7 @@ import type { Database } from '../db/database.js';
 import { ErpNextError, type ErpNextClient } from '../erpnext/client.js';
 import { findPartyPhone, type PartyType } from '../erpnext/contacts.js';
 import type { Outbox } from '../messaging/outbox.js';
-import type { InvoiceSettings, Settings } from '../config/settings.js';
+import { profileFor, type InvoiceSettings, type Settings } from '../config/settings.js';
 import { formatMoney, safeFileName, toNumber } from '../util/format.js';
 import type { Logger } from '../util/logger.js';
 import { displayPhone, isGroupJid, isJid, normalizePhone } from '../util/phone.js';
@@ -149,12 +149,16 @@ export class InvoiceService {
     if (toNumber(doc.is_return) === 1 && !cfg.includeReturns && options.source !== 'manual') {
       return { status: 'skipped', detail: 'returns are not sent (setting)', messageIds: [] };
     }
-    if (settings.general.company && doc.company !== settings.general.company && options.source !== 'manual') {
-      return { status: 'skipped', detail: `belongs to another company (${doc.company})`, messageIds: [] };
+    // Each company sends from its own WhatsApp number (Settings → Companies).
+    const profile = profileFor(settings, String(doc.company ?? ''));
+    if (!profile) {
+      return { status: 'skipped', detail: `no WhatsApp number is set up for company "${doc.company}"`, messageIds: [] };
     }
+    const accountId = profile.accountId;
+    const profileGroups = doctype === 'Sales Invoice' ? profile.salesGroups : profile.purchaseGroups;
 
     const wantParty = cfg.sendToParty && (!options.only || options.only.includes('party'));
-    const groups = !options.only || options.only.includes('group') ? cfg.groups.filter(Boolean) : [];
+    const groups = !options.only || options.only.includes('group') ? profileGroups.filter(Boolean) : [];
     if (!wantParty && groups.length === 0) {
       return { status: 'skipped', detail: 'no recipients configured', messageIds: [] };
     }
@@ -196,7 +200,7 @@ export class InvoiceService {
     const vars = this.buildTemplateVars(doctype, doc, { party_delivery: partyDelivery });
     const ids: number[] = [];
     const stamp = options.force ? `:${Date.now()}` : '';
-    const ref = { kind: 'invoice' as const, refDoctype: doctype, refName: name, attachmentId, attachmentName };
+    const ref = { accountId, kind: 'invoice' as const, refDoctype: doctype, refName: name, attachmentId, attachmentName };
 
     if (wantParty) {
       const body = renderTemplate(cfg.partyMessage, vars);

@@ -14,6 +14,9 @@ export interface AdminApi {
 
 export const COMPANY = 'Demo Trading LLC';
 export const ABBR = 'DT';
+/** A second company, to test "one WhatsApp number per company". */
+export const BRANCH = 'Demo Branch LLC';
+export const BRANCH_ABBR = 'DB';
 export const TZ = 'Asia/Dubai';
 
 export class Admin {
@@ -60,18 +63,20 @@ export class Admin {
   }
 
   /** Creates and submits a Sales Invoice. */
-  async salesInvoice(customer: string, opts: { date?: string; dueDays?: number; qty?: number; rate?: number; isReturn?: boolean; returnAgainst?: string } = {}) {
+  async salesInvoice(customer: string, opts: { date?: string; dueDays?: number; qty?: number; rate?: number; isReturn?: boolean; returnAgainst?: string; company?: string } = {}) {
     const date = opts.date ?? todayInTz(TZ);
+    const company = opts.company ?? COMPANY;
+    const abbr = company === BRANCH ? BRANCH_ABBR : ABBR;
     return this.insert({
       doctype: 'Sales Invoice',
       customer,
-      company: COMPANY,
+      company,
       posting_date: date,
       set_posting_time: 1,
       due_date: opts.isReturn ? undefined : addDays(date, opts.dueDays ?? 10),
       is_return: opts.isReturn ? 1 : 0,
       return_against: opts.returnAgainst,
-      items: [{ item_code: 'Widget A', qty: (opts.isReturn ? -1 : 1) * (opts.qty ?? 2), rate: opts.rate ?? 500, warehouse: `Stores - ${ABBR}` }],
+      items: [{ item_code: 'Widget A', qty: (opts.isReturn ? -1 : 1) * (opts.qty ?? 2), rate: opts.rate ?? 500, warehouse: `Stores - ${abbr}` }],
       docstatus: 1,
     });
   }
@@ -114,6 +119,10 @@ export class Admin {
 export async function seed(admin: Admin): Promise<{ created: boolean }> {
   const today = todayInTz(TZ);
 
+  await admin.ensure(
+    { doctype: 'Company', company_name: BRANCH, abbr: BRANCH_ABBR, default_currency: 'AED', country: 'United Arab Emirates', create_chart_of_accounts_based_on: 'Standard Template', chart_of_accounts: 'Standard' },
+    BRANCH,
+  );
   await admin.ensure({ doctype: 'Account', account_name: 'Emirates NBD', parent_account: `Bank Accounts - ${ABBR}`, company: COMPANY, account_type: 'Bank', is_group: 0 }, `Emirates NBD - ${ABBR}`);
 
   for (const [name, reorder] of [
