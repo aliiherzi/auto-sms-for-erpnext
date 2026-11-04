@@ -67,6 +67,43 @@ async function busy(button, fn) {
   }
 }
 
+/** In-page "are you sure?" dialog (window.confirm is blocked in some embedded browsers). */
+function askConfirm(message, okLabel = 'OK') {
+  return new Promise((resolve) => {
+    const dialog = h('dialog', { class: 'ask' },
+      h('p', {}, message),
+      h('div', { class: 'row', style: 'justify-content:flex-end' },
+        h('button', { onclick: () => { resolve(false); dialog.close(); } }, 'Cancel'),
+        h('button', { class: 'primary', onclick: () => { resolve(true); dialog.close(); } }, okLabel),
+      ),
+    );
+    dialog.addEventListener('close', () => { resolve(false); dialog.remove(); });
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+
+/** In-page text input dialog (window.prompt is blocked in some embedded browsers). Resolves null on cancel. */
+function askText(label, value = '', okLabel = 'Save') {
+  return new Promise((resolve) => {
+    const input = h('input', { type: 'text', id: 'ask-text-input', value });
+    const finish = (result) => { resolve(result); dialog.close(); };
+    const dialog = h('dialog', { class: 'ask' },
+      h('form', { onsubmit: (e) => { e.preventDefault(); finish(input.value.trim() || null); } },
+        h('label', {}, label, input),
+        h('div', { class: 'row', style: 'justify-content:flex-end;margin-top:14px' },
+          h('button', { type: 'button', onclick: () => finish(null) }, 'Cancel'),
+          h('button', { type: 'submit', class: 'primary' }, okLabel),
+        ),
+      ),
+    );
+    dialog.addEventListener('close', () => { resolve(null); dialog.remove(); });
+    document.body.append(dialog);
+    dialog.showModal();
+    input.select();
+  });
+}
+
 function fmtTime(iso) {
   if (!iso) return '–';
   const d = new Date(iso);
@@ -189,7 +226,14 @@ async function showShell() {
   $('#shell').classList.remove('hidden');
   await refreshStatus();
   await loadGroups();
-  switchTab(location.hash.replace('#', '') || 'overview');
+  switchTab(tabFromHash());
+}
+
+/** Tab names in the address bar (#setup for Settings). */
+const TAB_HASH = { overview: 'overview', settings: 'setup', activity: 'activity', tools: 'tools', logs: 'logs' };
+function tabFromHash() {
+  const hash = location.hash.replace('#', '');
+  return Object.keys(TAB_HASH).find((tab) => TAB_HASH[tab] === hash) || 'overview';
 }
 
 $('#login-form').addEventListener('submit', async (event) => {
@@ -219,14 +263,18 @@ window.addEventListener('beforeunload', (event) => {
 });
 
 window.addEventListener('hashchange', () => {
-  const tab = location.hash.replace('#', '');
-  if (tab && tab !== state.tab) switchTab(tab);
+  const tab = tabFromHash();
+  if (tab !== state.tab) switchTab(tab);
 });
 
 function switchTab(tab) {
   if (!['overview', 'settings', 'activity', 'tools', 'logs'].includes(tab)) tab = 'overview';
   state.tab = tab;
-  history.replaceState(null, '', `#${tab}`);
+  try {
+    history.replaceState(null, '', `#${TAB_HASH[tab]}`);
+  } catch {
+    // some embedded browsers don't allow it; the tab still switches
+  }
   for (const btn of document.querySelectorAll('#tabs button')) btn.classList.toggle('active', btn.dataset.tab === tab);
   for (const section of document.querySelectorAll('.tab')) section.classList.toggle('hidden', section.id !== `tab-${tab}`);
   ({ overview: renderOverview, settings: renderSettings, activity: renderActivity, tools: renderTools, logs: renderLogs })[tab]();
@@ -316,12 +364,14 @@ function whatsappCard(account) {
         h('button', { onclick: (e) => busy(e.currentTarget, async () => { await loadGroups(true); toast(`${groupsOf(account.id).length} group(s) loaded`); overviewSignature = ''; renderOverview(); }) }, 'Reload groups'),
         h('button', {
           class: 'danger',
-          onclick: (e) =>
-            confirm(`Unlink "${account.label}"? You will have to scan a QR code again.`) &&
-            busy(e.currentTarget, async () => {
+          onclick: async (e) => {
+            const button = e.currentTarget;
+            if (!(await askConfirm(`Unlink "${account.label}"? You will have to scan a QR code again.`, 'Unlink'))) return;
+            busy(button, async () => {
               await api(`${base}/logout`, { method: 'POST' });
               await refreshStatus();
-            }),
+            });
+          },
         }, 'Unlink'),
       ),
     );
@@ -355,10 +405,11 @@ function whatsappCard(account) {
 
   const rename = h('button', {
     class: 'small ghost',
-    onclick: (e) => {
-      const label = prompt('Name for this WhatsApp number', account.label);
-      if (label && label.trim() && label !== account.label) {
-        busy(e.currentTarget, async () => {
+    onclick: async (e) => {
+      const button = e.currentTarget;
+      const label = await askText('Name for this WhatsApp number', account.label);
+      if (label && label !== account.label) {
+        busy(button, async () => {
           await api(base, { method: 'PATCH', body: { label } });
           await refreshStatus();
         });
@@ -368,14 +419,16 @@ function whatsappCard(account) {
   const remove = accounts().length > 1
     ? h('button', {
         class: 'small ghost danger',
-        onclick: (e) =>
-          confirm(`Remove "${account.label}"? It is unlinked from WhatsApp and its waiting messages are cancelled.`) &&
-          busy(e.currentTarget, async () => {
+        onclick: async (e) => {
+          const button = e.currentTarget;
+          if (!(await askConfirm(`Remove "${account.label}"? It is unlinked from WhatsApp and its waiting messages are cancelled.`, 'Remove'))) return;
+          busy(button, async () => {
             await api(base, { method: 'DELETE' });
             toast('Number removed');
             state.draft = null;
             await refreshStatus();
-          }),
+          });
+        },
       }, 'Remove')
     : null;
   return h('div', { class: 'card' }, h('h2', {}, `📱 ${account.label}`, h('span', { class: 'spacer' }), rename, remove), body);
@@ -520,7 +573,7 @@ async function previewReport(body, title) {
   const res = await api('/reports/preview', { method: 'POST', body });
   const dialog = h(
     'dialog',
-    { style: 'max-width:640px;width:calc(100% - 32px);border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);padding:18px' },
+    { class: 'preview' },
     h('h2', { style: 'margin-top:0;font-size:16px' }, `Preview: ${title}`),
     res.empty ? h('p', { class: 'muted small' }, 'Nothing to report right now.') : null,
     h('div', { class: 'message-preview' }, res.text),
@@ -641,7 +694,7 @@ function profileEditor(p, index, companyNames) {
     h('div', { class: 'report-head' },
       h('strong', {}, p.company || 'All other companies'),
       h('span', { class: 'spacer' }),
-      d.companies.length > 1 ? h('button', { class: 'small danger', onclick: () => { if (confirm('Remove this company entry?')) { d.companies.splice(index, 1); markDirty(); drawSettings(); } } }, 'Remove') : null,
+      d.companies.length > 1 ? h('button', { class: 'small danger', onclick: async () => { if (await askConfirm('Remove this company entry?', 'Remove')) { d.companies.splice(index, 1); markDirty(); drawSettings(); } } }, 'Remove') : null,
     ),
     h('div', { class: 'fields' },
       field('ERPNext company', null, bindSelect(p, 'company', companyOptions, { onchange: (e) => { p.company = e.target.value; markDirty(); drawSettings(); } })),
@@ -946,7 +999,7 @@ function reportEditor(r, index, opts) {
       h('span', { class: 'badge' }, types[r.type]),
       h('span', { class: 'spacer' }),
       h('button', { class: 'small', onclick: (e) => busy(e.currentTarget, () => previewReport({ report: r }, r.title || types[r.type])) }, 'Preview'),
-      h('button', { class: 'small danger', onclick: () => { if (confirm('Remove this report?')) { state.draft.reports.items.splice(index, 1); markDirty(); drawSettings(); } } }, 'Remove'),
+      h('button', { class: 'small danger', onclick: async () => { if (await askConfirm('Remove this report?', 'Remove')) { state.draft.reports.items.splice(index, 1); markDirty(); drawSettings(); } } }, 'Remove'),
     ),
     h('div', { class: 'fields' },
       field('Title (optional)', null, bindText(r, 'title', { placeholder: types[r.type] })),

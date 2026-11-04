@@ -1,3 +1,4 @@
+/* Layout: sticky top bar + tabs, one centred column of cards; tables stack on phones. */
 :root {
   --bg: #f5f7f6;
   --card: #ffffff;
@@ -7,14 +8,19 @@
   --accent: #128c6e;
   --accent-strong: #0d6e56;
   --accent-soft: #e3f4ee;
+  --on-accent: #ffffff;
   --warn-bg: #fff6e0;
   --warn-border: #f0d48a;
   --warn-text: #6b4e00;
+  --warn-dot: #e3a008;
   --danger: #c0392b;
   --danger-soft: #fdecea;
+  --on-danger: #ffffff;
   --ok: #1e8e3e;
   --ok-soft: #e6f4ea;
   --info-soft: #e8f0fe;
+  --qr-bg: #ffffff;
+  --backdrop: rgba(15, 20, 18, 0.45);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
   --radius: 12px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -22,7 +28,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0f1412;
     --card: #171e1b;
     --text: #e6ece9;
@@ -31,21 +37,59 @@
     --accent: #2fbf94;
     --accent-strong: #5fd3ae;
     --accent-soft: #15342b;
+    --on-accent: #06231b;
     --warn-bg: #2e2612;
     --warn-border: #5c4a1b;
     --warn-text: #f3d68f;
+    --warn-dot: #f0b429;
     --danger: #ff7b6e;
     --danger-soft: #3a1d1a;
+    --on-danger: #2a0b08;
     --ok: #5cd38b;
     --ok-soft: #173225;
     --info-soft: #1b2638;
+    --backdrop: rgba(0, 0, 0, 0.6);
     --shadow: none;
     color-scheme: dark;
   }
 }
 
+:root[data-theme='dark'] {
+  --bg: #0f1412;
+  --card: #171e1b;
+  --text: #e6ece9;
+  --muted: #9aa7a1;
+  --border: #2a3430;
+  --accent: #2fbf94;
+  --accent-strong: #5fd3ae;
+  --accent-soft: #15342b;
+  --on-accent: #06231b;
+  --warn-bg: #2e2612;
+  --warn-border: #5c4a1b;
+  --warn-text: #f3d68f;
+  --warn-dot: #f0b429;
+  --danger: #ff7b6e;
+  --danger-soft: #3a1d1a;
+  --on-danger: #2a0b08;
+  --ok: #5cd38b;
+  --ok-soft: #173225;
+  --info-soft: #1b2638;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --shadow: none;
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--card);
 }
 
 body {
@@ -82,11 +126,13 @@ pre {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 20px;
+  padding-block: 12px;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
   background: var(--card);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 5;
   flex-wrap: wrap;
 }
@@ -145,13 +191,14 @@ pre {
 }
 
 .pill.warn::before {
-  background: #e3a008;
+  background: var(--warn-dot);
 }
 
 .tabs {
   display: flex;
   gap: 4px;
-  padding: 0 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   background: var(--card);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
@@ -177,7 +224,9 @@ pre {
 main {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 20px 16px 80px;
+  padding-block: 20px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 
 .grid {
@@ -315,18 +364,12 @@ button:disabled {
 
 button.primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
 button.primary:hover {
   background: var(--accent-strong);
-}
-
-@media (prefers-color-scheme: dark) {
-  button.primary {
-    color: #06231b;
-  }
 }
 
 button.danger {
@@ -444,7 +487,7 @@ button.small {
   width: 240px;
   height: 240px;
   border-radius: 10px;
-  background: #fff;
+  background: var(--qr-bg);
   padding: 8px;
   border: 1px solid var(--border);
 }
@@ -567,7 +610,7 @@ details summary {
 }
 
 .logs .warn {
-  color: #b7791f;
+  color: var(--warn-text);
 }
 
 .logs .error,
@@ -580,7 +623,9 @@ details summary {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 
 .login-card {
@@ -596,8 +641,8 @@ details summary {
 /* ---------- toasts ---------- */
 .toasts {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -616,7 +661,37 @@ details summary {
 
 .toast.error {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
+}
+
+/* in-page dialogs */
+dialog.ask,
+dialog.preview {
+  width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  padding: 18px 20px;
+}
+
+dialog.ask p {
+  margin: 0 0 16px;
+}
+
+dialog::backdrop {
+  background: var(--backdrop);
+}
+
+/* demo banner (only used by the online demo) */
+.demo-banner {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 14px;
 }
 
 /* Tables become stacked cards on phones. */
@@ -642,7 +717,9 @@ details summary {
 
 @media (max-width: 600px) {
   .topbar {
-    padding: 10px 16px;
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
   .pills {
     margin-left: 0;
@@ -650,7 +727,7 @@ details summary {
     width: 100%;
   }
   main {
-    padding: 16px 16px 80px;
+    padding-block: 16px 80px;
   }
   .card {
     padding: 16px;
