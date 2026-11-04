@@ -1,5 +1,9 @@
 # Auto SMS for ERPNext
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/aliiherzi/auto-sms-for-erpnext?quickstart=1)
+
+**Try it first:** open the button above and follow [TESTING.md](TESTING.md) to test the real program with your own WhatsApp and ERPNext, before installing it on your server.
+
 A small standalone service that connects **ERPNext** to **WhatsApp**. It runs next to ERPNext, not inside it:
 
 - 🧾 **Customer invoices**: when a Sales Invoice is submitted, its PDF goes to the customer's WhatsApp with a personal message.
